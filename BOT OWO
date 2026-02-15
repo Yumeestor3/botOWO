@@ -1,0 +1,111 @@
+import telebot
+import requests
+from aitextgen import aitextgen
+import random
+import os
+
+# ==============================
+# Input TOKEN bot saat runtime
+# ==============================
+TOKEN = input("🔑 TOKEN BOT: ").strip()
+
+# ==============================
+# Konfigurasi Groq & Training AI
+# ==============================
+GROQ_API_KEY = "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"
+GROQ_BASE_URL = "https://api.groq.com/v1/databases/DEFAULT_DB_ID/documents"
+
+# AI siap pakai, pakai model kecil
+ai = aitextgen(model="124M")
+
+bot = telebot.TeleBot(TOKEN)
+
+# ==============================
+# Fungsi Groq
+# ==============================
+def get_player_data(player_id):
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+    query = {
+        "query": f'*[_type == "player" && player_id == "{player_id}"]{{user, level, gold, inventory}}'
+    }
+    try:
+        response = requests.post(GROQ_BASE_URL, json=query, headers=headers)
+        if response.status_code == 200 and response.json():
+            return response.json()[0]
+    except:
+        pass
+    return None
+
+def update_player_data(player_id, data):
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+    try:
+        requests.patch(f"{GROQ_BASE_URL}/{player_id}", json={"set": data}, headers=headers)
+    except:
+        pass
+
+# ==============================
+# Command /start
+# ==============================
+@bot.message_handler(commands=['start'])
+def start(message):
+    bot.send_message(
+        message.chat.id,
+        "👋 Selamat datang di AyumeeAiGames!\nKirim /hunt, /battle, /inventory, /shop atau chat biasa!"
+    )
+
+# ==============================
+# Command /train
+# ==============================
+@bot.message_handler(commands=['train'])
+def train_ai(message):
+    bot.send_message(message.chat.id, "⚡ AI sedang dilatih (simulasi) dengan data oWo default...")
+    bot.send_message(message.chat.id, "✅ AI siap merespon gaya game oWo!")
+
+# ==============================
+# Command /inventory
+# ==============================
+@bot.message_handler(commands=['inventory'])
+def inventory(message):
+    player_id = str(message.from_user.id)
+    player = get_player_data(player_id)
+    if not player:
+        bot.send_message(message.chat.id, "❌ Player tidak ditemukan!")
+        return
+    
+    items = player.get('inventory', [])
+    pets = ["🐰 Forest Bunny", "🦂 Desert Scorpion", "🦊 Fire Fox"]
+    text = "╭────────────────╮\n│         🎒 Inventori\n│________________________\n"
+    for item in items:
+        text += f"│ {item}\n"
+    text += "│________________________\n"
+    for pet in pets:
+        text += f"│ {pet}\n"
+    text += "╰─────────────────"
+    
+    bot.send_message(message.chat.id, text)
+
+# ==============================
+# Command /hunt
+# ==============================
+@bot.message_handler(commands=['hunt'])
+def hunt(message):
+    player_id = str(message.from_user.id)
+    player = get_player_data(player_id)
+    if not player:
+        bot.send_message(message.chat.id, "❌ Player tidak ditemukan!")
+        return
+    
+    loot_items = ["❄️ Frost Saber", "💀 Soul Reaper", "🧪 Small Potion", "📿 Necklace of Power"]
+    loot = random.choice(loot_items)
+    gold_earned = random.randint(5, 20)
+    exp_earned = random.randint(10, 30)
+
+    new_inventory = player.get('inventory', []) + [loot]
+    update_player_data(player_id, {"inventory": new_inventory, "gold": player.get('gold',0)+gold_earned})
+
+    response = (
+        f"🏹 Kamu hunting dan menemukan {loot}!\n"
+        f"💰 Gold +{gold_earned}\n"
+        f"✨ EXP +{exp_earned}"
+    )
+    bot.send_message(message.chat.id,
